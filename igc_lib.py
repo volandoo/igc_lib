@@ -36,6 +36,8 @@ from collections import defaultdict
 import lib.viterbi as viterbi
 import lib.geo as geo
 
+import matplotlib.pyplot as plt
+import numpy as np
 
 def _strip_non_printable_chars(string):
     """Filters a string removing non-printable characters.
