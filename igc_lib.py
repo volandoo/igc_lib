@@ -404,10 +404,12 @@ class Thermal:
     Attributes:
         enter_fix: a GNSSFix, entry point of the thermal
         exit_fix: a GNSSFix, exit point of the thermal
+        fixes: all GNSSFixes between enter_fix and exit_fix
     """
-    def __init__(self, enter_fix, exit_fix):
+    def __init__(self, enter_fix, exit_fix, fixes):
         self.enter_fix = enter_fix
         self.exit_fix = exit_fix
+        self.fixes = fixes
 
     def time_change(self):
         """Returns the time spent in the thermal, seconds."""
@@ -440,14 +442,16 @@ class Glide:
     Attributes:
         enter_fix: a GNSSFix, entry point of the glide
         exit_fix: a GNSSFix, exit point of the glide
+        fixes: all GNSSFixes between enter_fix and exit_fix
         track_length: a float, the total length, in kilometers, of the recorded
         track, between the entry point and the exit point; note that this is
         not the same as the distance between these points
     """
 
-    def __init__(self, enter_fix, exit_fix, track_length):
+    def __init__(self, enter_fix, exit_fix, fixes, track_length):
         self.enter_fix = enter_fix
         self.exit_fix = exit_fix
+        self.fixes = fixes
         self.track_length = track_length
 
     def time_change(self):
@@ -1161,12 +1165,13 @@ class Flight:
             elif circling_now and not fix.circling:
                 # Just ended circling
                 circling_now = False
-                thermal = Thermal(first_fix, fix)
+                thermal = Thermal(first_fix, fix, flight_fixes[first_fix.index:fix.index])
                 if (thermal.time_change() >
                         self._config.min_time_for_thermal - 1e-5):
                     self.thermals.append(thermal)
                     # glide ends at start of thermal
-                    glide = Glide(first_glide_fix, first_fix,
+                    glide = Glide(first_glide_fix, first_fix, 
+                                  flight_fixes[first_glide_fix.index:first_fix.index],
                                   distance_start_circling)
                     self.glides.append(glide)
                     gliding_now = False
@@ -1182,5 +1187,7 @@ class Flight:
                 distance = 0.0
 
         if gliding_now:
-            glide = Glide(first_glide_fix, last_glide_fix, distance)
+            glide = Glide(first_glide_fix, last_glide_fix, 
+                          flight_fixes[first_glide_fix.index:last_glide_fix.index],
+                          distance)
             self.glides.append(glide)
