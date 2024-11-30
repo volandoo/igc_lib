@@ -456,10 +456,10 @@ class Thermal:
         return self.__str__()
 
     def __str__(self):
+        idx_self = self.flight.thermals.index(self)
         hms = _rawtime_float_to_hms(self.time_change())
-        return ("Thermal(vertical_velocity=%.2f m/s, duration=%dm %ds)" %
-                (self.vertical_velocity(), hms.minutes, hms.seconds))
-
+        return ("Thermal%i(vertical_velocity=%.2f m/s, duration=%dm %ds)" %
+                (idx_self,self.vertical_velocity(), hms.minutes, hms.seconds))
 
 class Glide:
     """Represents a single glide detected in a flight.
@@ -528,11 +528,12 @@ class Glide:
         return self.__str__()
 
     def __str__(self):
+        idx_self = self.flight.glides.index(self)
         hms = _rawtime_float_to_hms(self.time_change())
         return (
-            ("Glide(dist=%.2f km, avg_speed=%.2f kph, "
+            ("Glide%i(dist=%.2f km, avg_speed=%.2f kph, "
              "avg L/D=%.2f duration=%dm %ds)") % (
-                self.track_length, self.speed(), self.glide_ratio(),
+                idx_self,self.track_length, self.speed(), self.glide_ratio(),
                 hms.minutes, hms.seconds))
 
 
