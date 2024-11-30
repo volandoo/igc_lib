@@ -427,6 +427,26 @@ class Thermal:
             return 0.0
         return self.alt_change() / self.time_change()
 
+    def plot(self):
+        """Plot timeseries for inspection"""
+        fig, ax = plt.subplots(2)
+        fig.suptitle(self.__str__())
+        # time
+        t = np.array([fix.timestamp for fix in self.fixes]) # s since epoch
+        # bearing
+        ax[0].plot(t,np.array([fix.bearing_change_rate for fix in self.fixes]),
+                   '-bx',label='bearing change [deg/s]')
+        ax[0].plot(t,np.array([fix.bearing for fix in self.fixes]),
+                   '-kx',label='bearing [deg]')
+        ax[0].grid()
+        ax[0].legend(loc="upper left")
+        # pressure altitude
+        ax[1].plot(t,np.array([fix.press_alt for fix in self.fixes]),'-bx')
+        ax[1].grid()
+        ax[1].set_ylabel("m")
+        # draw
+        plt.show(block=False)
+
     def __repr__(self):
         return self.__str__()
 
@@ -473,6 +493,26 @@ class Glide:
         if math.fabs(self.alt_change()) < 1e-7:
             return 0.0
         return (self.track_length * 1000.0) / self.alt_change()
+
+    def plot(self):
+        """Plot timeseries for inspection"""
+        fig, ax = plt.subplots(2)
+        fig.suptitle(self.__str__())
+        # time
+        t = np.array([fix.timestamp for fix in self.fixes]) # s since epoch
+        # bearing
+        ax[0].plot(t,np.array([fix.bearing_change_rate for fix in self.fixes]),
+                   '-bx',label='bearing change [deg/s]')
+        ax[0].plot(t,np.array([fix.bearing for fix in self.fixes]),
+                   '-kx',label='bearing [deg]')
+        ax[0].grid()
+        ax[0].legend(loc="upper left")
+        # pressure altitude
+        ax[1].plot(t,np.array([fix.press_alt for fix in self.fixes]),'-bx')
+        ax[1].grid()
+        ax[1].set_ylabel("m")
+        # draw
+        plt.show(block=False)
 
     def __repr__(self):
         return self.__str__()
