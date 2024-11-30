@@ -412,6 +412,7 @@ class Thermal:
         self.enter_fix = enter_fix
         self.exit_fix = exit_fix
         self.fixes = fixes
+        self.flight = None
 
     def time_change(self):
         """Returns the time spent in the thermal, seconds."""
@@ -447,6 +448,10 @@ class Thermal:
         # draw
         plt.show(block=False)
 
+    def set_flight(self, flight):
+        """Sets parent Flight object."""
+        self.flight = flight
+
     def __repr__(self):
         return self.__str__()
 
@@ -475,6 +480,7 @@ class Glide:
         self.exit_fix = exit_fix
         self.fixes = fixes
         self.track_length = track_length
+        self.flight = None
 
     def time_change(self):
         """Returns the time spent in the glide, seconds."""
@@ -513,6 +519,10 @@ class Glide:
         ax[1].set_ylabel("m")
         # draw
         plt.show(block=False)
+
+    def set_flight(self, flight):
+        """Sets parent Flight object."""
+        self.flight = flight
 
     def __repr__(self):
         return self.__str__()
@@ -748,6 +758,12 @@ class Flight:
         self._compute_bearing_change_rates()
         self._compute_circling()
         self._find_thermals()
+
+        for thermal in self.thermals:
+            thermal.set_flight(self)
+
+        for glide in self.glides:
+            glide.set_flight(self)
 
     def _parse_a_records(self, a_records):
         """Parses the IGC A record.
