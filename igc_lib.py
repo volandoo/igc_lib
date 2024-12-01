@@ -408,6 +408,7 @@ class Thermal:
         exit_fix: a GNSSFix, exit point of the thermal
         fixes: all GNSSFixes between enter_fix and exit_fix
         direction: Circling direction: L, R or LR
+        time_per_circle: Average time per circle over thermal 
     """
     def __init__(self, enter_fix, exit_fix, fixes):
         self.enter_fix = enter_fix
@@ -415,6 +416,7 @@ class Thermal:
         self.fixes = fixes
         self.flight = None
         self.direction = None
+        self.time_per_circle = -1
 
     def time_change(self):
         """Returns the time spent in the thermal, seconds."""
@@ -472,17 +474,38 @@ class Thermal:
         else:
             self.direction = "LR"
 
+    def _compute_time_per_circle(self):
+        """Average time per circle
+        
+        This is a measure of thermaling skill, as better
+        pilots tend to fly tighter circles.
+
+        So far we compute this for mono-directional thermals,
+        that is, thermals where the pilot didn't change thermaling
+        direction while in the thermal.
+        """
+        if self.direction == "LR":
+            return
+        
+        # compute based on accumulated bearing change
+        bearing_uw = np.unwrap(
+            np.array([fix.bearing for fix in self.fixes]),
+            period=360)
+        abs_rotation = np.abs(bearing_uw[-1] - bearing_uw[1])
+        self.time_per_circle = self.time_change() / (abs_rotation / 360)
+
     def __repr__(self):
         return self.__str__()
 
     def __str__(self):
         idx_self = self.flight.thermals.index(self)
-        return ("T%03i(dur %4d s, gain %4i m, avg %.2f m/s, dir %-2s)" %
+        return ("T%03i(dur %4d s, gain %4i m, avg %.2f m/s, dir %-2s, TC %4.1f)" %
                 (idx_self,
                  self.time_change(),
                  self.alt_change(),
                  self.vertical_velocity(), 
-                 self.direction))
+                 self.direction,
+                 self.time_per_circle))
 
 class Glide:
     """Represents a single glide detected in a flight.
@@ -793,6 +816,7 @@ class Flight:
         for thermal in self.thermals:
             thermal.set_flight(self)
             thermal._compute_circling_direction()
+            thermal._compute_time_per_circle()
 
         for glide in self.glides:
             glide.set_flight(self)
