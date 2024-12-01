@@ -463,9 +463,11 @@ class Thermal:
             'LR', for mixed thermals
         """
         x = np.array([fix.bearing_change_rate for fix in self.fixes])
-        if np.sum(x > 0) / np.size(x) > 0.75:
+        # positive bearing change rate is clock-wise rotation, 
+        # i.e. circling to the right
+        if np.sum(x > 0) / np.size(x) > self.flight._config.circling_direction_threshold:
             self.direction = "R"
-        elif np.sum(x < 0) / np.size(x) > 0.75:
+        elif np.sum(x < 0) / np.size(x) > self.flight._config.circling_direction_threshold:
             self.direction = "L"
         else:
             self.direction = "LR"
@@ -641,6 +643,12 @@ class FlightParsingConfig(object):
 
     # Minimum time to consider circling a thermal, seconds.
     min_time_for_thermal = 60.0
+
+    # Threshold for cirlcing left/right detection
+    # If a significant part of the thermal is spent circling in one
+    # direction, it is labeled either L or R. If not, i.e. mixed
+    # circling directions, it is labeled LR.
+    circling_direction_threshold = 0.75
 
 
 class Flight:
