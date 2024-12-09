@@ -30,6 +30,9 @@ import math
 import re
 import xml.dom.minidom
 from pathlib2 import Path
+import os
+import geopandas as gpd
+from shapely.geometry import Point
 
 from collections import defaultdict
 
@@ -653,6 +656,9 @@ class FlightParsingConfig(object):
     #     periods between segments (legacy behavior)
     which_flight_to_pick = "concat"
 
+    # Radius around takeoff fix for search in takeoff database, meters.
+    takeoff_name_radius = 500
+
     #
     # Thermal detection parameters.
     #
@@ -810,7 +816,8 @@ class Flight:
             self.notes.append("Error: did not detect takeoff.")
             self.valid = False
             return
-
+        
+        self._takeoff_name()
         self._compute_bearings()
         self._compute_bearing_change_rates()
         self._compute_circling()
@@ -863,7 +870,7 @@ class Flight:
                 month = int(mm)
                 day = int(dd)
                 if 1 <= month <= 12 and 1 <= day <= 31:
-                    epoch = datetime.datetime(year=1970, month=1, day=1)
+                    epoch = datetime.datetime(year=1970, month=1, day=1) # UNIX time
                     date = datetime.datetime(year=year, month=month, day=day)
                     self.date_timestamp = (date - epoch).total_seconds()
         elif record[0:5] == 'HFGTY':
@@ -1310,3 +1317,42 @@ class Flight:
                           flight_fixes[first_glide_fix.index:last_glide_fix.index],
                           distance)
             self.glides.append(glide)
+
+    def _takeoff_name(self):
+        """Extract named takeoff and landing locations from database
+        
+        Database is extracted from paraglidingearth.com
+        """
+
+        # Load the GeoJSON FeatureCollection into a GeoDataFrame
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     'data','paraglidingearth','pgEarthSpots.json') 
+        gdf = gpd.read_file(p)
+        
+        # Create a Point geometry for the given lat0, lon0
+        takeoff = Point(self.takeoff_fix.lon, self.takeoff_fix.lat)
+        
+        # Convert the GeoDataFrame to a projected CRS to measure distances in meters
+        # WGS 84 (lat/lon) is EPSG:4326, and we convert to a metric CRS like EPSG:3857
+        gdf = gdf.set_crs(epsg=4326)  # Ensure it's in WGS84 (lat/lon)
+        gdf = gdf.to_crs(epsg=3857)   # Convert to a metric CRS for distance calculations
+        
+        # Convert the reference point to the same CRS
+        takeoff = gpd.GeoSeries([takeoff], crs='EPSG:4326').to_crs(epsg=3857).iloc[0]
+        
+        # Calculate distances from the reference point to each feature
+        gdf['distance'] = gdf.geometry.distance(takeoff)
+        
+        # Filter the features within the specified distance
+        nearby = gdf[gdf['distance'] <= self._config.takeoff_name_radius]
+        nearby = nearby.sort_values(by='distance', ascending=True)
+
+        if nearby.empty:
+            self.takeoff_name = ''
+            self.takeoff_dist = 0
+            self.takeoff_country = ''
+
+        else:
+            self.takeoff_name = nearby.iloc[0]['name']
+            self.takeoff_dist = nearby.iloc[0]['distance']
+            self.takeoff_country = nearby.iloc[0]['countryCode']
