@@ -1362,7 +1362,7 @@ class Flight:
             self.takeoff_dist = nearby.iloc[0]['distance']
             self.takeoff_country = nearby.iloc[0]['countryCode']
 
-    def print_flight_summary(self):
+    def flight_summary(self):
         """Print flight summary
         
         As JSON
@@ -1425,4 +1425,4 @@ class Flight:
             }
         }
         
-        print(json.dumps(info, indent=2))
+        return json.dumps(info, indent=2)
