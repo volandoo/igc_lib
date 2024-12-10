@@ -32,7 +32,7 @@ import xml.dom.minidom
 from pathlib2 import Path
 import os
 import geopandas as gpd
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString
 import json
 
 from collections import defaultdict
@@ -1426,3 +1426,42 @@ class Flight:
         }
         
         return json.dumps(info, indent=2)
+    
+    def thermals_to_gdf(self):
+        """Thermals to geopandas geodataframe"""
+        
+        # Convert the array of coordinates to a LineString
+        line = []
+        for thermal in self.thermals:
+            line.append( LineString(np.array([[fix.lon, fix.lat] for fix in thermal.fixes])) )
+
+        # Create a GeoDataFrame with the LineString geometry
+        gdf = gpd.GeoDataFrame({
+            'geometry': line, 
+            'duration': [thermal.time_change() for thermal in self.thermals],
+            'alt_change': [thermal.alt_change() for thermal in self.thermals],
+            'vertical_velocity': [thermal.vertical_velocity() for thermal in self.thermals],
+            'direction': [thermal.direction for thermal in self.thermals],
+            })
+        gdf.set_crs(epsg=4326, inplace=True)
+
+        return gdf
+
+    def glides_to_gdf(self):
+        """Glides to geopandas geodataframe"""
+
+        # Convert the array of coordinates to a LineString
+        line = []
+        for glide in self.glides:
+            line.append( LineString(np.array([[fix.lon, fix.lat] for fix in glide.fixes])) )
+
+        # Create a GeoDataFrame with the LineString geometry
+        gdf = gpd.GeoDataFrame({
+            'geometry': line, 
+            'duration': [glide.time_change() for glide in self.glides],
+            'alt_change': [glide.alt_change() for glide in self.glides],
+            'glide_ratio': [glide.glide_ratio() for glide in self.glides],
+            })
+        gdf.set_crs(epsg=4326, inplace=True)
+
+        return gdf
