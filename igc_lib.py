@@ -33,6 +33,7 @@ from pathlib2 import Path
 import os
 import geopandas as gpd
 from shapely.geometry import Point
+import json
 
 from collections import defaultdict
 
@@ -865,6 +866,9 @@ class Flight:
                 r"(?:HFDTE|HFDTEDATE:[ ]*)(\d\d)(\d\d)(\d\d)",
                 record, flags=re.IGNORECASE)
             if match:
+                # https://xp-soaring.github.io/igc_file_format/igc_format_2008.html#link_3.3
+                # HFDTEDDMMYY UTC date this file was recorded
+                # If file contains midnight, not clear which day is recorded here.
                 dd, mm, yy = [_strip_non_printable_chars(group) for group in match.groups()]
                 year = int(2000 + int(yy))
                 month = int(mm)
@@ -872,6 +876,7 @@ class Flight:
                 if 1 <= month <= 12 and 1 <= day <= 31:
                     epoch = datetime.datetime(year=1970, month=1, day=1) # UNIX time
                     date = datetime.datetime(year=year, month=month, day=day)
+                    self.date_utc = date
                     self.date_timestamp = (date - epoch).total_seconds()
         elif record[0:5] == 'HFGTY':
             match = re.match(
@@ -1356,3 +1361,68 @@ class Flight:
             self.takeoff_name = nearby.iloc[0]['name']
             self.takeoff_dist = nearby.iloc[0]['distance']
             self.takeoff_country = nearby.iloc[0]['countryCode']
+
+    def print_flight_summary(self):
+        """Print flight summary
+        
+        As JSON
+        """
+        
+        # times
+        t0 = self.date_utc + datetime.timedelta(seconds=self.takeoff_fix.rawtime)
+        t1 = self.date_utc + datetime.timedelta(seconds=self.landing_fix.rawtime)
+        T = t1 - t0
+
+        # fraction of airtime spent thermalling
+        thermal_time = sum([th.time_change() for th in self.thermals]) 
+        thermal_frac = thermal_time / T.total_seconds()
+        glide_time = sum([gl.time_change() for gl in self.glides])
+        glide_frac = glide_time / T.total_seconds()
+
+        # best average climb speed and best alt gain
+        thermal_max_climb = max([th.vertical_velocity() for th in self.thermals])
+        thermal_max_gain = max([th.alt_change() for th in self.thermals])
+
+        # circling direction
+        t_sum_L = sum([th.time_change() for th in self.thermals if th.direction == "L"])
+        t_sum_R = sum([th.time_change() for th in self.thermals if th.direction == "R"])
+        t_sum_LR = sum([th.time_change() for th in self.thermals if th.direction == "LR"])
+
+        # glide speed, weighted avg
+        glide_avg_speed = sum([gl.time_change()*gl.speed() for gl in self.glides])/glide_time
+
+        info = {
+            "takeoff": {   
+                "name"     :  self.takeoff_name,
+                "country"  :  self.takeoff_country,
+                "dist"     : {"value": self.takeoff_dist, "unit": "m"},
+                "time"     : {"value": t0.__str__(), "unit": "UTC"},
+                "lat"      : {"value": self.takeoff_fix.lat,"unit": "deg"},
+                "lon"      : {"value": self.takeoff_fix.lon,"unit": "deg"},
+                "alt_gnss" : {"value": self.takeoff_fix.gnss_alt, "unit": "m"}
+            },
+            "landing": {
+                "time"     :  {"value": t1.__str__(), "unit": "UTC"},
+                "lat"      :  {"value": self.landing_fix.lat, "unit": "deg"},
+                "lon"      :  {"value": self.landing_fix.lon, "unit": "deg"},
+                "alt_gnss" :  {"value": self.landing_fix.gnss_alt, "unit": "m"}
+            },
+            "flight": {
+                "airtime_str"  : T.__str__(),
+                "airtime"      : {"value": T.total_seconds(), "unit": "s"}
+            },
+            "thermals": {
+                "time_total"    : {"value": thermal_frac, "unit": "%"},
+                "max_avg_climb" : {"value": thermal_max_climb, "unit": "m/s"},
+                "max_gain"      : {"value": thermal_max_gain, "unit": "m"},
+                "circ_dir_L"    : {"value": t_sum_L/thermal_time , "unit": "%"},
+                "circ_dir_R"    : {"value": t_sum_R/thermal_time , "unit": "%"},
+                "circ_dir_LR"   : {"value": t_sum_LR/thermal_time , "unit": "%"}
+            },
+            "glides": {
+                "time_total"    : {"value": glide_frac, "unit": "%"},
+                "avg_speed"     : {"value": glide_avg_speed , "unit": "km/h"}
+            }
+        }
+        
+        print(json.dumps(info, indent=2))
