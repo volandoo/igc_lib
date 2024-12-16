@@ -1374,22 +1374,34 @@ class Flight:
         T = t1 - t0
 
         # fraction of airtime spent thermalling
-        thermal_time = sum([th.time_change() for th in self.thermals]) 
-        thermal_frac = thermal_time / T.total_seconds()
-        glide_time = sum([gl.time_change() for gl in self.glides])
-        glide_frac = glide_time / T.total_seconds()
+        if self.thermals:
+            thermal_time = sum([th.time_change() for th in self.thermals]) 
+            thermal_frac = thermal_time / T.total_seconds()
+            # best average climb speed and best alt gain
+            thermal_max_climb = max([th.vertical_velocity() for th in self.thermals])
+            thermal_max_gain = max([th.alt_change() for th in self.thermals])
+            # circling direction
+            t_sum_L = sum([th.time_change() for th in self.thermals if th.direction == "L"])
+            t_sum_R = sum([th.time_change() for th in self.thermals if th.direction == "R"])
+            t_sum_LR = sum([th.time_change() for th in self.thermals if th.direction == "LR"])
+        else:
+            thermal_time = 0
+            thermal_frac = 0
+            thermal_max_climb = 0
+            thermal_max_gain = 0
+            t_sum_L = 0
+            t_sum_R = 0
+            t_sum_LR = 0
 
-        # best average climb speed and best alt gain
-        thermal_max_climb = max([th.vertical_velocity() for th in self.thermals])
-        thermal_max_gain = max([th.alt_change() for th in self.thermals])
-
-        # circling direction
-        t_sum_L = sum([th.time_change() for th in self.thermals if th.direction == "L"])
-        t_sum_R = sum([th.time_change() for th in self.thermals if th.direction == "R"])
-        t_sum_LR = sum([th.time_change() for th in self.thermals if th.direction == "LR"])
-
-        # glide speed, weighted avg
-        glide_avg_speed = sum([gl.time_change()*gl.speed() for gl in self.glides])/glide_time
+        if self.glides:
+            glide_time = sum([gl.time_change() for gl in self.glides])
+            glide_frac = glide_time / T.total_seconds()
+            # glide speed, weighted avg
+            glide_avg_speed = sum([gl.time_change()*gl.speed() for gl in self.glides])/glide_time
+        else:
+            glide_time = 0
+            glide_frac = 0
+            glide_avg_speed = 0
 
         info = {
             "takeoff": {   
@@ -1415,9 +1427,9 @@ class Flight:
                 "time_total"    : {"value": thermal_frac, "unit": "%"},
                 "max_avg_climb" : {"value": thermal_max_climb, "unit": "m/s"},
                 "max_gain"      : {"value": thermal_max_gain, "unit": "m"},
-                "circ_dir_L"    : {"value": t_sum_L/thermal_time , "unit": "%"},
-                "circ_dir_R"    : {"value": t_sum_R/thermal_time , "unit": "%"},
-                "circ_dir_LR"   : {"value": t_sum_LR/thermal_time , "unit": "%"}
+                "circ_dir_L"    : {"value": t_sum_L/thermal_time if thermal_time != 0 else 0, "unit": "%"},
+                "circ_dir_R"    : {"value": t_sum_R/thermal_time if thermal_time != 0 else 0, "unit": "%"},
+                "circ_dir_LR"   : {"value": t_sum_LR/thermal_time if thermal_time != 0 else 0, "unit": "%"}
             },
             "glides": {
                 "time_total"    : {"value": glide_frac, "unit": "%"},
