@@ -25,23 +25,22 @@ was considered broken.
 from __future__ import print_function
 
 import collections
+from collections import defaultdict
 import datetime
 import math
 import re
 import xml.dom.minidom
 from pathlib2 import Path
 import os
-import geopandas as gpd
-from shapely.geometry import Point, LineString
 import json
-
-from collections import defaultdict
 
 import lib.viterbi as viterbi
 import lib.geo as geo
 
 import matplotlib.pyplot as plt
 import numpy as np
+import geopandas as gpd
+from shapely.geometry import Point, LineString
 
 def _strip_non_printable_chars(string):
     """Filters a string removing non-printable characters.
@@ -721,6 +720,15 @@ class Flight:
         gnss_alt_valid: a bool, whether the GNSS altitude sensor is OK
     """
 
+    # ensure properties exist, even if no match in igc record
+    glider_type = ''
+    fr_recorder_type = ''
+    fr_gps_receiver = ''
+    fr_firmware_version = ''
+    fr_hardware_version = ''
+    fr_pressure_sensor = ''
+    competition_class = ''
+
     @staticmethod
     def create_from_file(filename, config_class=FlightParsingConfig):
         """Creates an instance of Flight from a given file.
@@ -874,9 +882,10 @@ class Flight:
                 month = int(mm)
                 day = int(dd)
                 if 1 <= month <= 12 and 1 <= day <= 31:
-                    epoch = datetime.datetime(year=1970, month=1, day=1) # UNIX time
                     date = datetime.datetime(year=year, month=month, day=day)
                     self.date_utc = date
+                    # conversion to UNIX time
+                    epoch = datetime.datetime(year=1970, month=1, day=1)
                     self.date_timestamp = (date - epoch).total_seconds()
         elif record[0:5] == 'HFGTY':
             match = re.match(
@@ -1380,10 +1389,18 @@ class Flight:
             # best average climb speed and best alt gain
             thermal_max_climb = max([th.vertical_velocity() for th in self.thermals])
             thermal_max_gain = max([th.alt_change() for th in self.thermals])
-            # circling direction
-            t_sum_L = sum([th.time_change() for th in self.thermals if th.direction == "L"])
-            t_sum_R = sum([th.time_change() for th in self.thermals if th.direction == "R"])
+            # circling direction, sum of time spent
+            t_sum_L  = sum([th.time_change() for th in self.thermals if th.direction == "L"])
+            t_sum_R  = sum([th.time_change() for th in self.thermals if th.direction == "R"])
             t_sum_LR = sum([th.time_change() for th in self.thermals if th.direction == "LR"])
+            # Time per circle weighted average
+            # Does not make sense to compute for mixed-direction thermals
+            tc_L = sum([th.time_change()*th.time_per_circle 
+                        for th in self.thermals 
+                        if th.direction == "L"]) / t_sum_L
+            tc_R = sum([th.time_change()*th.time_per_circle 
+                        for th in self.thermals 
+                        if th.direction == "R"]) / t_sum_R
         else:
             thermal_time = 0
             thermal_frac = 0
@@ -1392,6 +1409,8 @@ class Flight:
             t_sum_L = 0
             t_sum_R = 0
             t_sum_LR = 0
+            tc_L = 0
+            tc_R = 0
 
         if self.glides:
             glide_time = sum([gl.time_change() for gl in self.glides])
@@ -1404,24 +1423,26 @@ class Flight:
             glide_avg_speed = 0
 
         info = {
+            "flight": {
+                "date"         : str(self.date_utc.date()),
+                "airtime_str"  : str(T),
+                "airtime"      : {"value": T.total_seconds(), "unit": "s"},
+                "glider_type"  : self.glider_type,
+            },
             "takeoff": {   
                 "name"     :  self.takeoff_name,
                 "country"  :  self.takeoff_country,
                 "dist"     : {"value": self.takeoff_dist, "unit": "m"},
-                "time"     : {"value": t0.__str__(), "unit": "UTC"},
+                "datetime" : {"value": str(t0), "unit": "UTC"},
                 "lat"      : {"value": self.takeoff_fix.lat,"unit": "deg"},
                 "lon"      : {"value": self.takeoff_fix.lon,"unit": "deg"},
                 "alt_gnss" : {"value": self.takeoff_fix.gnss_alt, "unit": "m"}
             },
             "landing": {
-                "time"     :  {"value": t1.__str__(), "unit": "UTC"},
+                "datetime" :  {"value": str(t1), "unit": "UTC"},
                 "lat"      :  {"value": self.landing_fix.lat, "unit": "deg"},
                 "lon"      :  {"value": self.landing_fix.lon, "unit": "deg"},
                 "alt_gnss" :  {"value": self.landing_fix.gnss_alt, "unit": "m"}
-            },
-            "flight": {
-                "airtime_str"  : T.__str__(),
-                "airtime"      : {"value": T.total_seconds(), "unit": "s"}
             },
             "thermals": {
                 "time_total"    : {"value": thermal_frac, "unit": "%"},
@@ -1429,11 +1450,21 @@ class Flight:
                 "max_gain"      : {"value": thermal_max_gain, "unit": "m"},
                 "circ_dir_L"    : {"value": t_sum_L/thermal_time if thermal_time != 0 else 0, "unit": "%"},
                 "circ_dir_R"    : {"value": t_sum_R/thermal_time if thermal_time != 0 else 0, "unit": "%"},
-                "circ_dir_LR"   : {"value": t_sum_LR/thermal_time if thermal_time != 0 else 0, "unit": "%"}
+                "circ_dir_LR"   : {"value": t_sum_LR/thermal_time if thermal_time != 0 else 0, "unit": "%"},
+                "circ_time_L"   : {"value": tc_L, "unit": "s"},
+                "circ_time_R"   : {"value": tc_R, "unit": "s"},
             },
             "glides": {
                 "time_total"    : {"value": glide_frac, "unit": "%"},
                 "avg_speed"     : {"value": glide_avg_speed , "unit": "km/h"}
+            },
+            "recorder": {
+                "type": self.fr_recorder_type,
+                "code": self.fr_manuf_code,
+                "gnss" : self.fr_gps_receiver,
+                "press": self.fr_pressure_sensor,
+                "firmware_v" : self.fr_firmware_version,
+                "hardware_v": self.fr_hardware_version
             }
         }
         
