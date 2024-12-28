@@ -1381,19 +1381,12 @@ class Flight:
             glide_frac = 0
             glide_avg_speed = 0
 
-        # bounding box for map
-        timeseries = self.timeseries()
-        cornerNE = [max(timeseries['lat']),max(timeseries['lon'])]
-        cornerSW = [min(timeseries['lat']),min(timeseries['lon'])]
-
         info = {
             "flight": {
                 "date"         : str(self.date_utc.date()),
                 "airtime"      : {"value": T.total_seconds(), "unit": "s"},
                 "glider_type"  : self.glider_type,
-                "bounding_box" : [cornerNE,cornerSW],
             },
-            "timeseries"   : timeseries,
             "takeoff": {
                 "datetime" : {"value": str(t0), "unit": "UTC"},
                 "lat"      : {"value": self.takeoff_fix.lat,"unit": "deg"},
@@ -1427,7 +1420,7 @@ class Flight:
                 "press": self.fr_pressure_sensor,
                 "firmware_v" : self.fr_firmware_version,
                 "hardware_v": self.fr_hardware_version
-            }
+            },
         }
         return json.dumps(info)
     
