@@ -1381,13 +1381,19 @@ class Flight:
             glide_frac = 0
             glide_avg_speed = 0
 
+        # bounding box for map
+        timeseries = self.timeseries()
+        cornerNE = [max(timeseries['lat']),max(timeseries['lon'])]
+        cornerSW = [min(timeseries['lat']),min(timeseries['lon'])]
+
         info = {
             "flight": {
                 "date"         : str(self.date_utc.date()),
-                "airtime_str"  : str(T),
                 "airtime"      : {"value": T.total_seconds(), "unit": "s"},
                 "glider_type"  : self.glider_type,
+                "bounding_box" : [cornerNE,cornerSW],
             },
+            "timeseries"   : timeseries,
             "takeoff": {
                 "datetime" : {"value": str(t0), "unit": "UTC"},
                 "lat"      : {"value": self.takeoff_fix.lat,"unit": "deg"},
@@ -1423,9 +1429,20 @@ class Flight:
                 "hardware_v": self.fr_hardware_version
             }
         }
-        
-        return json.dumps(info, indent=2)
+        return json.dumps(info)
     
+    def timeseries(self):
+        """time / lat / lon / alt"""
+        # return only subset valid & flying
+        fixes = [fix for fix in self.fixes if fix.validity and fix.flying]
+        return {
+            'time': [int(fix.rawtime) for fix in fixes],
+            'lat': [fix.lat for fix in fixes],
+            'lon':  [fix.lon for fix in fixes],
+            'alt_gnss': [int(fix.gnss_alt) for fix in fixes],
+            'alt_pres': [int(fix.press_alt) for fix in fixes]
+        }
+
     def thermals_to_gdf(self):
         """Thermals to geopandas geodataframe"""
         
