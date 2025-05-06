@@ -1223,8 +1223,7 @@ class Flight:
             if prev_fix is None:
                 self.fixes[curr_fix].bearing_change_rate = 0.0
             else:
-                bearing_change = (self.fixes[prev_fix].bearing -
-                                  self.fixes[curr_fix].bearing)
+                bearing_change = (self.fixes[prev_fix].bearing - self.fixes[curr_fix].bearing)
                 if math.fabs(bearing_change) > 180.0:
                     if bearing_change < 0.0:
                         bearing_change += 360.0
